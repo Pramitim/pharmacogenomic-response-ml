@@ -1,816 +1,614 @@
-Can increasingly nonlinear models predict sensitivity to a particular cancer drug from gene-expression data better than linear regression?
+# ML-Based Cancer Drug Sensitivity Prediction
 
-1. Build the merged dataset — pull the overlapping cell lines for your chosen drug out of the TPM file, transpose it, and join it with the AUC values to get your final X (gene expression) and y (AUC) — this is Steps 3–6 in your README.
-2. Handle dimensionality — with likely 500ish samples and 20,000 genes, you'll need to decide on feature selection or PCA, and you'll want to try that interactively.
-3. Train/test split, standardize features — using the training set only, to avoid leakage.
-4. Build and compare models — Linear Regression → Random Forest → PyTorch MLP (per your README, with XGBoost as optional), running and comparing each in cells so you can see results immediately.
-   Evaluate — RMSE/MAE/R² per model, plots comparing them.
-   Write up your findings — markdown cells explaining what you found, whether your hypothesis held.
+This project investigates whether increasingly complex machine-learning models can predict **cancer-cell drug sensitivity from gene-expression profiles**.
 
-01_data_exploration.ipynb — everything you just did: EDA, missing values, choosing the drug (keep this as-is, it's your record of why you picked Docetaxel/whichever ID).
-02_build_dataset.ipynb — merging TPM + GDSC data for your chosen drug, building final X/y, dimensionality handling.
-03_modeling.ipynb — train/test split, standardization, and the model comparison (Linear Regression → Random Forest → PyTorch MLP).
+The project uses publicly available pharmacogenomic data to build a regression task where:
 
-STEP 1: Choose one drug
+- **Input (`X`)** = gene-expression profile of a cancer cell line
+- **Target (`y`)** = that cell line's response to one specific drug
+- **Observation** = one cancer cell line tested against the selected drug
+
+The models are compared as an increasing progression in complexity:
+
+**Linear Regression → Random Forest → PyTorch MLP**
+
+The goal is not to assume that more complex models will perform better, but to test whether they actually improve generalization on unseen cell lines.
+
+---
+
+## Research Question & Hypothesis
+
+### Research Question
+
+> **Can increasingly nonlinear models predict sensitivity to a particular cancer drug from gene-expression data better than linear regression?**
+
+### Hypothesis
+
+Nonlinear models may achieve better predictive performance than linear regression because drug response can depend on **nonlinear relationships and interactions among genes**.
+
+However, the opposite result would also be meaningful. If a simpler linear model performs as well as or better than the nonlinear models, this would suggest that additional model complexity does not necessarily improve prediction for this dataset.
+
+---
+
+# Project Structure
+
+```text
+project/
+│
+├── data/
+│   └── processed/
+│       ├── rnaseq_merged_rsem_tpm_20260323.csv
+│       └── GDSC2_fitted_dose_response_27Oct23.csv
+│
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_build_dataset.ipynb
+│   └── 03_modeling.ipynb
+│
+└── README.md
+```
+
+### Notebooks
+
+#### `01_data_exploration.ipynb`
+
+Used for understanding and exploring the datasets, performing initial cleaning, examining drug-response distributions, and selecting the drug used in the experiment.
+
+This notebook records the selection of **Docetaxel (Drug ID = 1819)**.
+
+#### `02_build_dataset.ipynb`
+
+Used to:
+
+- Match cell lines between the TPM and GDSC datasets
+- Keep only cell lines present in both datasets
+- Transpose the TPM data into an ML-compatible format
+- Construct the final feature matrix `X`
+- Construct the target vector `y`
+- Handle missing data and dimensionality
+
+#### `03_modeling.ipynb`
+
+Used for the ML experiment:
+
+- Train/test splitting
+- Feature standardization
+- Model training
+- Model comparison
+- Evaluation using regression metrics
+
+The models are evaluated in increasing order of nonlinearity:
+
+```text
+Linear Regression
+        ↓
+Random Forest
+        ↓
+PyTorch MLP
+```
+
+---
+
+# Data Sources
+
+## 1. RNA-Seq TPM Gene Expression
+
+`data/processed/rnaseq_merged_rsem_tpm_20260323.csv`
+
+The RNA-seq dataset contains gene-expression measurements for cancer cell models.
+
+- Each `SIDM...` identifier represents a specific cancer cell model.
+- Each **column** represents a cell model.
+- Each **row** represents a gene.
+- Each gene/cell-model intersection contains the measured expression level in **TPM (Transcripts Per Million)**.
+
+A value of `0` means the processed expression value is zero; it does \*\*not necessarily mean that the gene is completely absent from the cell.
+
+Because the data is TPM-normalized, the expression values across all genes in a sample sum to approximately **1,000,000**.
+
+---
+
+## 2. GDSC Drug-Response Data
+
+`data/processed/GDSC2_fitted_dose_response_27Oct23.csv`
+
+This dataset contains drug-response measurements for cancer cell lines tested against different drugs.
+
+The dataset contains response measurements including:
+
+- **AUC**
+- **LN_IC50**
+- **RMSE**
+
+For this project, **AUC** was selected as the target variable.
+
+---
+
+# Drug Selection
+
+A single drug was selected rather than attempting to predict responses to multiple drugs.
+
+This created a cleaner experimental question:
+
+```text
+Gene expression of Cell Line A
+                ↓
+          ML model
+                ↓
+Predicted response to Drug X
+```
+
+The main consideration was the **overlap between the GDSC response data and the TPM expression data**.
+
+A cell line was only considered a usable sample if it had:
+
+1. A drug-response measurement for the selected drug
+2. A corresponding gene-expression profile in the TPM dataset
+
+## Selection Process
+
+For every drug in the GDSC dataset, the number of cell lines with both drug-response data and TPM expression data was determined.
+
+Candidate drugs were then evaluated based on:
+
+### 1. Number of overlapping cell lines
+
+Drugs with approximately **400+ usable cell lines** were prioritized.
+
+The important number was not the total number of cell lines tested in GDSC, but the number remaining **after matching with the TPM dataset**.
+
+### 2. Variation in AUC
+
+The distribution and standard deviation of AUC values were examined.
+
+Drugs with very little variation were avoided because there would be little response variation for the model to learn.
+
+### 3. Biological relevance
+
+Targeted therapies with known biomarkers or biological mechanisms were preferred where possible, as this provides a basis for interpreting important predictive genes.
+
+### 4. Existing research
+
+Existing studies using gene-expression data to predict response to candidate drugs were considered as potential benchmarks for the final model.
+
+---
+
+# Selected Drug: Docetaxel
+
+The selected drug was:
+
+```text
+Drug name: Docetaxel
+Drug ID: 1819
+```
+
+Docetaxel was selected because it provided a suitable combination of **overlapping cell lines and AUC variation** for the ML experiment.
+
+The AUC distribution showed sufficient spread to provide meaningful variation in the target variable.
+
+> **Important:** GDSC contains another Docetaxel entry with **Drug ID = 1007**. This project uses **Docetaxel (ID = 1819)** only.
+
+The two Docetaxel entries could potentially be investigated as a future extension, but they were kept separate for this experiment.
+
+---
+
+# Target Variable: AUC
+
+**AUC (Area Under the Dose-Response Curve)** was used as the continuous target variable representing drug sensitivity.
+
+AUC summarizes the entire dose-response curve rather than relying on a single measurement such as IC50.
+
+For this project:
+
+- **Lower AUC → greater drug sensitivity**
+- **Higher AUC → greater drug resistance**
+- AUC values are generally normalized to approximately **0–1**
+
+AUC was preferred because it captures the overall response across the tested concentration range and does not require the dose-response curve to reach exactly 50% inhibition.
+
+---
+
+# Exploratory Data Analysis
+
+Initial exploratory analysis was performed before constructing the ML dataset.
+
+### Missing Data
+
+`PUTATIVE_TARGET` contained **27,872 missing values**.
+
+Several drug names appeared with multiple IDs in the GDSC dataset, including:
+
+- Acetalax
+- Dactinomycin
+- Docetaxel
+- Fulvestrant
+- GSK343
+- Oxaliplatin
+- Selumetinib
+- Ulixertinib
+- Uprosertib
+
+Therefore, **drug name alone was not used to identify a drug**. The corresponding `DRUG_ID` was used to distinguish entries.
+
+### AUC Distribution
+
+The overall AUC distribution showed a large spike around **1.0**.
+
+This indicates that many drug–cell-line combinations showed little or no measurable drug effect, resulting in AUC values near the maximum.
+
+This is biologically plausible. Many drugs are only effective against particular cancer types or cell lines with specific molecular vulnerabilities. When a drug is tested against a cell line without the relevant vulnerability, the response can remain close to the resistance ceiling.
+
+This creates a **ceiling effect** in the response distribution.
+
+These high-AUC observations were not automatically treated as errors or outliers because they represent genuine biological resistance.
+
+For the selected Docetaxel dataset, the AUC distribution had sufficient variation to proceed with regression modeling.
+
+---
+
+# Building the ML Dataset
+
+The raw datasets were structured differently, so they first had to be transformed into a common ML format.
+
+## Step 1: Select the Drug
+
+```text
+Docetaxel
+Drug ID = 1819
+```
+
 ↓
-STEP 2: Get all cell lines tested with that drug
+
+## Step 2: Identify Cell Lines Tested With the Drug
+
+All GDSC cell lines with a response measurement for Docetaxel were identified.
+
 ↓
-STEP 3: Check which of those SANGER_MODEL_IDs
-also exist in the TPM file
+
+## Step 3: Match Cell Lines With the TPM Dataset
+
+The corresponding cell-line identifiers were matched against the TPM expression dataset.
+
 ↓
-STEP 4: Keep only the overlapping cell lines
+
+## Step 4: Keep Only Overlapping Cell Lines
+
+Only cell lines present in **both datasets** were retained.
+
+This produced the actual set of usable samples.
+
 ↓
-STEP 5: Transpose the TPM data
+
+## Step 5: Transpose the TPM Data
+
+The original TPM data was structured approximately as:
+
+```text
+             Cell A   Cell B   Cell C
+Gene 1         ...      ...      ...
+Gene 2         ...      ...      ...
+Gene 3         ...      ...      ...
+```
+
+For ML, the data was transposed to:
+
+```text
+             Gene 1   Gene 2   Gene 3   ...   Gene N
+Cell A         ...      ...      ...            ...
+Cell B         ...      ...      ...            ...
+Cell C         ...      ...      ...            ...
+```
+
+This follows the standard ML structure:
+
+> **Rows = samples, columns = features**
+
 ↓
-STEP 6: Build X and y
 
-                 TPM DATA
-                     ↓
+## Step 6: Build `X` and `y`
 
-SIDM01132 → [gene1, gene2, gene3, ..., geneN]
-SIDM00848 → [gene1, gene2, gene3, ..., geneN]
-↓
-X
+The final dataset was structured as:
 
-                GDSC2 DATA
-                     ↓
+```text
+                 Gene 1   Gene 2   Gene 3   ...   Gene N
+Cell Line A        ...      ...      ...            ...
+Cell Line B        ...      ...      ...            ...
+Cell Line C        ...      ...      ...            ...
+```
 
-SIDM01132 → AUC = 0.930
-SIDM00848 → AUC = 0.615
-↓
-y
+This becomes:
 
-# Two data sources
+```text
+X = gene-expression features
+```
 
-1. [RNA Sequence TPM](data/processed/rnaseq_merged_rsem_tpm_20260323.csv)
+The corresponding GDSC responses were:
 
-Each SIDM... value identifies a specific cancer cell model. Each column corresponds to one cell model, while each row corresponds to a gene. The number where a gene and cell model intersect represents that gene's measured expression level in that cell, expressed as TPM. A value of zero means no measurable expression was detected or the processed expression value is zero; it does not necessarily mean the gene is absent from the cell. Because the data is TPM-normalized, the expression values across all genes in a sample sum to approximately 1,000,000 rather than 100.
+```text
+Cell Line A → AUC
+Cell Line B → AUC
+Cell Line C → AUC
+```
 
-2. [Cell response to drug](data/processed/GDSC2_fitted_dose_response_27Oct23.csv)
+This becomes:
 
-Each cell line is tested against a drug. The sensitivity of the response is recorded in different measurements (AUC, LN_IC50, RMSE)
-
-### Which drug to choose:
-
-should choose a drug that has a good number of cell lines with drug-response measurements and overlapping TPM expression data.
-
-What matters is the overlap: cell lines that have both a drug-response measurement AND expression data. If a drug looks well-tested in GDSC but half those cell lines aren't in your Cell Model Passports expression file, your real usable sample size is much smaller than it looks.
-
-#### Process for choosing drug
-
-1. Check sample size per drug
-
-First, merge your two datasets on cell line ID (using that model_id/COSMIC mapping we talked about) — even before picking a drug.
-Then group by drug and count non-null response values within that merged table only. This is now your real, honest sample size per drug — accounts for both response and expression availability at once. You want a drug tested across as many cell lines as possible — more samples means a more trainable, more defensible model. Aim for at least 300-400 cell lines; below that, your train/val/test splits get too small to trust.
-
-2. Check response variance
-   For your top candidates by sample size, check the spread (standard deviation) of IC50/AUC values. If a drug's response is nearly identical across all cell lines, there's nothing for your model to actually learn or predict. You want real variance — some clearly sensitive cell lines, some clearly resistant.
-
-3. Prefer a targeted therapy over broad chemo
-   From the drugs that pass both filters, prefer a targeted therapy with a known biomarker over a broad cytotoxic chemo drug. Something like Erlotinib (EGFR inhibitor) or a BRAF inhibitor has a known, well-documented gene-expression/mutation relationship to response. This matters because it means you can sanity-check your model's top predictive features against real biology — if your model highlights genes unrelated to the known pathway, that's a useful, explainable finding either way.
-
-4. Sanity check: has anyone published on this drug already
-   Search 'Erlotinib GDSC prediction' or similar for your top candidate. If there's existing published work predicting response to that drug from expression data, that becomes your direct comparison point — you can state how your result compares to a known benchmark, which is exactly the kind of rigor that makes a project credible.
-
-### WHY AUC?
-
-- area under curve
-  "I will use AUC as the continuous target variable representing drug sensitivity."
-
-AUC vs LN_IC50: AUC (area under the dose-response curve) is often the preferred target in GDSC-based modeling over IC50, because it summarizes the whole curve rather than one point — it doesn't require the curve to actually reach 50% inhibition within the tested concentration range, so drugs that were only mildly effective still get a well-defined AUC value (whereas their IC50 might be extrapolated/unreliable). Lower AUC = more sensitive, higher AUC = more resistant, values are typically normalized between 0 and 1.
-
-## Process
-
-1. First, understand exactly what your prediction problem is
-
-Your project can be reduced to:
-
-Input: gene-expression profile of a cancer cell line
-Output: that cell line's response to one specific drug
-
-So conceptually:
-
-Cell line → gene expression → ML model → predicted drug response
-
-The first thing you need to decide is:
-
-Am I predicting the response to one drug, or many drugs?
-
-For your three-day project, I strongly recommend starting with ONE drug.
-
-For example:
-
-Gene expression of Cell Line A → predicted response to Drug X
-
-Gene expression of Cell Line B → predicted response to Drug X
-
-etc.
-
-That makes your research question much cleaner:
-
-Can increasingly nonlinear models predict sensitivity to a particular cancer drug from gene-expression data better than linear regression?
-
-Once that works, you could potentially extend it to multiple drugs.
-
-2. Understand what your dataset actually looks like
-
-Before modeling anything, you need to understand the relationship between the datasets.
-
-You will probably encounter separate pieces of information such as:
-
-Gene-expression data
-Cell line Gene 1 Gene 2 Gene 3 ...
-Cell A 4.2 8.7 1.3 ...
-Cell B 5.1 6.4 2.1 ...
-Cell C 3.8 7.9 1.8 ...
-
-This becomes X.
-
-Drug-response data
-Cell line Drug Response
-Cell A Drug X 0.72
-Cell B Drug X 0.34
-Cell C Drug X 0.61
-
-This becomes y.
-
-You then have to join these datasets using the cell-line identifier.
-
-That's a very important part of the project.
-
-Conceptually:
-Gene expression Drug response
-↓ ↓
-Cell A → [4.2, 8.7, 1.3, ...] Cell A → 0.72
-Cell B → [5.1, 6.4, 2.1, ...] Cell B → 0.34
-Cell C → [3.8, 7.9, 1.8, ...] Cell C → 0.61
-↓
-JOIN
-↓
-Final ML dataset
-↓
-X y
-
-       3. Decide exactly what the response variable means
-
-This is another thing you need to figure out conceptually.
-
-“Drug sensitivity” isn't just one universal number.
-
-Pharmacogenomic datasets can contain different response measures, such as:
-
-IC50
-AUC
-viability
-sensitivity scores
-other drug-response measurements
-
-You need to choose one response metric.
-
-For example:
-
-"I will use [response metric] as the continuous target variable representing drug sensitivity."
-
-Then your problem is clearly a regression problem.
-
-You're not asking:
-
-Sensitive vs resistant?
-
-You're asking:
-
-What numerical response should we expect for this cell line?
-
-That's why linear regression, Random Forest regression, XGBoost regression, and a neural-network regressor make sense.
-
-his is probably the single most important conceptual question.
-
-For your initial experiment, I would want your final dataset to conceptually look like:
-
-Cell line Gene 1 Gene 2 Gene 3 ... Drug response
-Cell A ... ... ... ... 0.72
-Cell B ... ... ... ... 0.34
-Cell C ... ... ... ... 0.61
+```text
+y = AUC drug-response target
+```
 
 Therefore:
 
-One row = one cancer cell line tested against one particular drug.
-
-And:
-
-Columns = gene-expression features.
-
-Target = drug response.
-
-If you choose one drug, every row corresponds to a different cell line.
-
-That's a very clean experimental setup.
-
-5. Then understand the dimensionality problem
-
-This is where pharmacogenomic ML becomes interesting.
-
-You might have something like:
-
-Hundreds/thousands of cell lines
-
-but:
-
-Thousands/tens of thousands of genes
-
-So you could end up with:
-
-500 cell lines
-×
-20,000 gene-expression features
-
-That's a huge number of features relative to your number of samples.
-
-And this creates an important ML problem:
-
-Overfitting.
-
-Your model might effectively memorize the training data instead of learning relationships that generalize to unseen cell lines.
-
-This will also help explain why a neural network doesn't necessarily outperform linear regression.
-
-6. Decide how you're going to handle the high dimensionality
-
-You don't need to solve this immediately, but you need to understand the options.
-
-You could potentially use:
-
-Option A — Use a subset of genes
-
-For example:
-
-20,000 genes
-↓
-filter/select
-↓
-1,000 genes
-↓
-ML model
-Option B — Feature selection
-
-Select genes according to some criterion.
-
-Option C — Dimensionality reduction
-
-For example, PCA:
-
-20,000 genes
-↓
-PCA
-↓
-100 components
-↓
-ML model
-Option D — Regularization
-
-Especially useful for linear models.
-
-For your first version, don't make this unnecessarily complicated.
-
-But you need to understand that:
-
-“I have 20,000 features and only a few hundred observations” is a major experimental consideration.
-
-7. Understand your train/test split VERY carefully
-
-This is especially important for biological data.
-
-You want to answer:
-
-Can the model predict the response of a cell line it hasn't seen before?
-
-So conceptually:
-
-All cell lines
-↓
-┌────┴────┐
-↓ ↓
-Training Test
-80% 20%
-↓ ↓
-Learn Evaluate
-
-The test set should remain untouched until you're evaluating the final model.
-
-You don't want to accidentally let information from your test data influence preprocessing or model selection.
-
-This is called data leakage, and it's something you should specifically understand before starting.
-
-8. Understand standardization
-
-Your genes may have very different numerical ranges.
-
-For example:
-
-Gene A: 0–5
-Gene B: 0–1,000
-Gene C: 0–20
-
-You may standardize the features so they're on comparable scales.
-
-Conceptually:
-
-Raw gene expression
-↓
-Standardization
-↓
-Comparable feature scales
-↓
-ML model
-
-But here's an important detail:
-
-You fit the scaler on the training data only.
-
-Then use that fitted scaler to transform validation/test data.
-
-This is another place where data leakage can happen.
-
-9. Understand what each model is actually testing
-
-Don't think of your models as four unrelated things.
-
-Think of them as an experimental progression.
-
-Linear Regression
-
-Question:
-
-Can a relatively simple linear relationship explain drug response?
-
-Random Forest
-
-Question:
-
-Does allowing nonlinear relationships and feature interactions improve prediction?
-
-XGBoost
-
-Question:
-
-Does a more powerful nonlinear boosting approach improve prediction further?
-
-Neural Network
-
-Question:
-
-Can a learned nonlinear function capture patterns that classical models miss?
-
-So your experiment becomes:
-
-Simple
-↓
-Linear Regression
-↓
-Random Forest
-↓
-XGBoost
-↓
-Neural Network
-↓
-More flexible
-
-But more complex ≠ automatically better.
-
-That's actually one of the most interesting things you can investigate.
-
-10. Decide what "better" means
-
-You need to establish this before looking at your results.
-
-For regression, you could use:
-
-RMSE
-MAE
-R²
-
-For example:
-
-Model RMSE ↓ MAE ↓ R² ↑
-Linear Regression 0.42 0.31 0.38
-Random Forest 0.39 0.29 0.44
-XGBoost 0.36 0.27 0.51
-Neural Network 0.45 0.33 0.30
-
-You'd then ask:
-
-Did the more complex model actually generalize better?
-
-Notice that RMSE/MAE are better when lower, while R² is better when higher.
-
-11. You need a hypothesis
-
-Your project becomes much more research-like if you establish a hypothesis before running everything.
-
-Something like:
-
-Hypothesis: Nonlinear machine-learning models will achieve better predictive performance than a linear regression baseline because drug response may depend on nonlinear relationships and interactions among gene-expression features.
-
-But importantly, you shouldn't be disappointed if this is wrong.
-
-Suppose you get:
-
-Linear Regression R² = 0.42
-Random Forest R² = 0.39
-XGBoost R² = 0.45
-Neural Network R² = 0.31
-
-That's actually interesting.
-
-You now have something to investigate.
-
-12. One thing I would change from your original plan
-
-I would not commit to XGBoost yet.
-
-Your core experiment should be:
-
-Linear Regression → Random Forest → PyTorch MLP
-
-XGBoost becomes an optional fourth model.
-
-Why?
-
-Because you're trying to learn ML, not maximize the number of algorithms in the README.
-
-If you spend half of Day 2 fighting with preprocessing and XGBoost instead of understanding your data and PyTorch, that's counterproductive.
-
-13. Your actual starting point
-
-So I would divide your work into three phases.
-
-Phase 1 — Conceptual understanding
-
-Before coding, make sure you can answer:
-
-What is the biological question?
-What is a cell line?
-What is gene expression?
-What is pharmacogenomic drug sensitivity?
-What does your response metric mean?
-What exactly is one observation?
-What are X and y?
-What is regression?
-Why is linear regression your baseline?
-What makes Random Forest nonlinear?
-What is a neural network actually learning?
-What is overfitting?
-What is data leakage?
-Why do we need train/test separation?
-What do RMSE, MAE, and R² tell you?
-
-You do not need to master all of these before coding.
-
-You just need enough understanding that you're not blindly running scikit-learn functions.
-
-14. Phase 2 — Figure out the data
-
-Then your first actual coding milestone should NOT be training a model.
-
-It should be:
-
-Create one clean dataset containing gene-expression features and the drug-response target for one drug.
-
-Your first notebook might literally be:
-
-01_data_exploration.ipynb
-
-And your goal is simply:
-
-Download data
-↓
-Understand files
-↓
-Inspect columns
-↓
-Identify cell-line IDs
-↓
-Identify gene-expression data
-↓
-Identify drug-response data
-↓
-Choose drug
-↓
-Join datasets
-↓
-Inspect final X and y
-
-At the end, you should be able to print something conceptually like:
-
-Samples: 350
-Features: 1000
-Target: Drug X response
-
-That's your first major milestone.
-
-15. Phase 3 — Build the simplest possible model
-
-Only after the dataset is correct:
-
-X, y
-↓
-Train/test split
-↓
-Preprocessing
-↓
-Linear Regression
-↓
-Predictions
-↓
-RMSE / MAE / R²
-
-Then save those results.
-
-8. Understand standardization
-
-Your genes may have very different numerical ranges.
-
-For example:
-
-Gene A: 0–5
-Gene B: 0–1,000
-Gene C: 0–20
-
-You may standardize the features so they're on comparable scales.
-
-Conceptually:
-
-Raw gene expression
-↓
-Standardization
-↓
-Comparable feature scales
-↓
-ML model
-
-But here's an important detail:
-
-You fit the scaler on the training data only.
-
-Then use that fitted scaler to transform validation/test data.
-
-This is another place where data leakage can happen.
-
-9. Understand what each model is actually testing
-
-Don't think of your models as four unrelated things.
-
-Think of them as an experimental progression.
-
-Linear Regression
-
-Question:
-
-Can a relatively simple linear relationship explain drug response?
-
-Random Forest
-
-Question:
-
-Does allowing nonlinear relationships and feature interactions improve prediction?
-
-XGBoost
-
-Question:
-
-Does a more powerful nonlinear boosting approach improve prediction further?
-
-Neural Network
-
-Question:
-
-Can a learned nonlinear function capture patterns that classical models miss?
-
-So your experiment becomes:
-
-Simple
-↓
-Linear Regression
-↓
-Random Forest
-↓
-XGBoost
-↓
-Neural Network
-↓
-More flexible
-
-But more complex ≠ automatically better.
-
-That's actually one of the most interesting things you can investigate.
-
-10. Decide what "better" means
-
-You need to establish this before looking at your results.
-
-For regression, you could use:
-
-RMSE
-MAE
-R²
-
-For example:
-
-Model RMSE ↓ MAE ↓ R² ↑
-Linear Regression 0.42 0.31 0.38
-Random Forest 0.39 0.29 0.44
-XGBoost 0.36 0.27 0.51
-Neural Network 0.45 0.33 0.30
-
-You'd then ask:
-
-Did the more complex model actually generalize better?
-
-Notice that RMSE/MAE are better when lower, while R² is better when higher.
-
-11. You need a hypothesis
-
-Your project becomes much more research-like if you establish a hypothesis before running everything.
-
-Something like:
-
-Hypothesis: Nonlinear machine-learning models will achieve better predictive performance than a linear regression baseline because drug response may depend on nonlinear relationships and interactions among gene-expression features.
-
-But importantly, you shouldn't be disappointed if this is wrong.
-
-Suppose you get:
-
-Linear Regression R² = 0.42
-Random Forest R² = 0.39
-XGBoost R² = 0.45
-Neural Network R² = 0.31
-
-That's actually interesting.
-
-You now have something to investigate.
-
-12. One thing I would change from your original plan
-
-I would not commit to XGBoost yet.
-
-Your core experiment should be:
-
-Linear Regression → Random Forest → PyTorch MLP
-
-XGBoost becomes an optional fourth model.
-
-Why?
-
-Because you're trying to learn ML, not maximize the number of algorithms in the README.
-
-If you spend half of Day 2 fighting with preprocessing and XGBoost instead of understanding your data and PyTorch, that's counterproductive.
-
-13. Your actual starting point
-
-So I would divide your work into three phases.
-
-Phase 1 — Conceptual understanding
-
-Before coding, make sure you can answer:
-
-What is the biological question?
-What is a cell line?
-What is gene expression?
-What is pharmacogenomic drug sensitivity?
-What does your response metric mean?
-What exactly is one observation?
-What are X and y?
-What is regression?
-Why is linear regression your baseline?
-What makes Random Forest nonlinear?
-What is a neural network actually learning?
-What is overfitting?
-What is data leakage?
-Why do we need train/test separation?
-What do RMSE, MAE, and R² tell you?
-
-You do not need to master all of these before coding.
-
-You just need enough understanding that you're not blindly running scikit-learn functions.
-
-14. Phase 2 — Figure out the data
-
-Then your first actual coding milestone should NOT be training a model.
-
-It should be:
-
-Create one clean dataset containing gene-expression features and the drug-response target for one drug.
-
-Your first notebook might literally be:
-
-01_data_exploration.ipynb
-
-And your goal is simply:
-
-Download data
-↓
-Understand files
-↓
-Inspect columns
-↓
-Identify cell-line IDs
-↓
-Identify gene-expression data
-↓
-Identify drug-response data
-↓
-Choose drug
-↓
-Join datasets
-↓
-Inspect final X and y
-
-At the end, you should be able to print something conceptually like:
-
-Samples: 350
-Features: 1000
-Target: Drug X response
-
-That's your first major milestone.
-
-15. Phase 3 — Build the simplest possible model
-
-Only after the dataset is correct:
-
-X, y
-↓
-Train/test split
-↓
-Preprocessing
-↓
-Linear Regression
-↓
-Predictions
-↓
-RMSE / MAE / R²
-
-Then save those results.
-
-## Jupytry notebooks
-
-- used to record how we chose drug and test feature/threshold/model
-
-## Notes made EDA (exploratory data analysis)
-
-- 'PUTATIVE_TARGET' has 27872 missing values
-- the following have two id's
-  DRUG_NAME
-  Acetalax 2
-  Dactinomycin 2
-  Docetaxel 2
-  Fulvestrant 2
-  GSK343 2
-  Oxaliplatin 2
-  Selumetinib 2
-  Ulixertinib 2
-  Uprosertib 2
-
-_result of AUC distribution curve_
-
-- spike at 1.0
-- means a large number of drug–cell line combinations showed essentially no drug effect — the cell line's viability stayed near 100% across the whole tested dose range, so the area under the curve is at (or very near) its maximum.
-- Why this happens biologically: most drugs in a large screening panel like GDSC are only effective against specific cancer types or cell lines with a particular vulnerability (e.g. a targeted therapy only works on cell lines with the mutation it targets). Test that same drug against an unrelated cell line, and it does essentially nothing — hence AUC pinned near 1.0. With thousands of drug × cell-line combinations tested, a lot of them are just "wrong pairing, no effect," which piles up at the ceiling
-
-Why this matters for your model:
-
-It's not a smooth continuous distribution — you have a big mass at the ceiling plus a spread of everything else. This is sometimes called a censored or ceiling effect, and it can make plain regression harder, since the model has to both distinguish "no effect" from "some effect" and predict fine-grained values within the responsive range.
-These aren't necessarily errors or outliers — don't be tempted to drop them, they're real biology (resistance).
-Something to consider going forward: some pharmacogenomics workflows model this as two problems — a classification step ("does this drug have any effect on this cell line at all?") followed by regression only on the responsive subset — because a single regression model can struggle to fit both the flat ceiling mass and the meaningful variation together.
-
-# things to check
-
-- which drugs have more than 300–400 cell line samples (real, honest count — after merging response and expression data on cell line ID, not before)
-- which drugs have the most response variance (std of AUC) — not drugs where nearly every cell line is resistant (AUC ~1.0), since there's nothing to predict there
-- of those, which have the most overlapping cell lines in the TPM gene expression file (a drug can look well-tested in GDSC but lose most of its samples if those cell lines aren't in the expression data)
-- prefer a targeted therapy with a known biomarker (e.g. an EGFR or BRAF inhibitor) over a broad chemo drug — makes it easier to sanity-check the model's top predictive genes against known biology
-- check whether anyone has published results predicting response to that drug from expression data — gives a benchmark to compare against
-
-```python
-for drug in drug_counts.head(10).index:
-    subset = dose_response[dose_response['DRUG_NAME'] == drug]['AUC']
-    print(drug, "std:", subset.std(), "mean:", subset.mean())
+```text
+X: Gene-expression profile
+          ↓
+      ML model
+          ↓
+y: Predicted Docetaxel AUC
 ```
 
-for every drug listed in the GDSC file we are going to get a count of how many of those cell lines tested against exist in the rna_seq file
+---
 
-# Drug selected: Docetaxel
+# Handling Dimensionality
 
-DRUG_ID = 1819
-DRUG_NAME = Docetaxel
+Gene-expression data contains a very large number of potential features relative to the number of cell-line samples.
 
-AUC is spread well
+This creates a high-dimensional learning problem:
 
-**note: there is another Docetaxel with the id of 1007 we are not working with that**
+```text
+Hundreds of cell lines
+        ×
+Thousands of genes
+```
 
-- think about combining them later?
+Having many more features than observations increases the risk of **overfitting**.
 
-# build_dataset
+During dataset construction, genes with consistently missing measurements were removed. In the current preprocessing, **397 genes were removed** because they were consistently missing across the relevant observations.
 
-transposing sample to keep with ML consistency of rows=samples, columns=features
+Dimensionality handling is therefore an important consideration when interpreting model performance.
 
-dropped 397 genes since consistently missing from 4724 occurances
+---
+
+# ML Pipeline
+
+The complete modeling pipeline follows:
+
+```text
+                    Gene Expression
+                           │
+                           ▼
+                  Matched Cell Lines
+                           │
+                           ▼
+                     Final X / y
+                           │
+                           ▼
+                  Train / Test Split
+                           │
+                           ▼
+                    Standardization
+                           │
+             ┌─────────────┼─────────────┐
+             ▼             ▼             ▼
+       Linear Regression  Random Forest  PyTorch MLP
+             │             │             │
+             └─────────────┼─────────────┘
+                           ▼
+                    Model Evaluation
+                           │
+                           ▼
+                  Compare Performance
+```
+
+## Train/Test Split
+
+The dataset is divided into training and test sets.
+
+```text
+All cell lines
+      │
+      ├──────────────┐
+      ▼              ▼
+   Training         Test
+     data           data
+      │              │
+      ▼              │
+ Train models        │
+                     │
+                     ▼
+                Final evaluation
+```
+
+The test set is kept separate from model training and preprocessing decisions so that it represents genuinely unseen cell lines.
+
+This is important for determining whether the model can **generalize to cell lines it has not seen before**.
+
+---
+
+# Standardization
+
+Gene-expression features can have very different numerical ranges.
+
+For example:
+
+```text
+Gene A → 0–5
+Gene B → 0–1,000
+Gene C → 0–20
+```
+
+Standardization puts features onto comparable scales.
+
+Importantly, the standardization parameters are learned from the **training data only** and then applied to the test data.
+
+This prevents information from the test set from leaking into the training process.
+
+---
+
+# Model Comparison
+
+The models represent an increasing level of flexibility.
+
+## 1. Linear Regression
+
+**Question:**
+
+> Can a linear relationship between gene expression and drug response explain the observed variation in AUC?
+
+This provides the baseline.
+
+---
+
+## 2. Random Forest
+
+**Question:**
+
+> Does allowing nonlinear relationships and interactions between features improve prediction?
+
+Random Forest provides a nonlinear tree-based comparison to the linear baseline.
+
+---
+
+## 3. PyTorch MLP
+
+**Question:**
+
+> Can a neural network learn nonlinear patterns in gene-expression data that the simpler models cannot capture?
+
+The MLP provides the deep-learning component of the experiment.
+
+---
+
+### Why Compare These Models?
+
+The goal is not simply to find the most complicated model.
+
+Instead, the models allow the following question to be tested:
+
+```text
+Does increasing model complexity
+            ↓
+capture more useful biological patterns
+            ↓
+and improve prediction on unseen cell lines?
+```
+
+A more complex model performing worse would be an informative result rather than a failure.
+
+---
+
+# Model Evaluation
+
+Because the task is **regression**, model performance is evaluated using:
+
+### RMSE
+
+**Root Mean Squared Error**
+
+Measures the average magnitude of prediction errors while giving greater weight to larger errors.
+
+**Lower is better.**
+
+### MAE
+
+**Mean Absolute Error**
+
+Measures the average absolute difference between predicted and actual AUC.
+
+**Lower is better.**
+
+### R²
+
+**Coefficient of Determination**
+
+Measures how much of the variation in the target is explained by the model.
+
+**Higher is better.**
+
+The final comparison will focus on whether the nonlinear models actually improve **generalization performance** compared with the linear regression baseline.
+
+---
+
+# Key Experimental Considerations
+
+## High Dimensionality
+
+The number of gene-expression features can be much larger than the number of cell-line samples.
+
+This creates a substantial risk of overfitting and makes feature selection, dimensionality handling, and regularization important considerations.
+
+## Data Leakage
+
+Preprocessing steps such as standardization must be fitted using training data only.
+
+The test set should remain untouched until final evaluation.
+
+## Ceiling Effect in AUC
+
+The large number of AUC values near 1.0 represents substantial drug resistance in the broader GDSC dataset.
+
+This can make regression more difficult because the model must distinguish between:
+
+```text
+No/very little drug response
+          vs.
+Meaningful drug response
+          vs.
+Different levels of sensitivity
+```
+
+A potential future extension would be to investigate a **two-stage approach**:
+
+```text
+Stage 1: Does the drug have a meaningful effect?
+                  ↓
+Stage 2: How strong is the response?
+```
+
+However, the current project focuses on the simpler continuous AUC regression problem.
+
+---
+
+# Experimental Progression
+
+The project follows a deliberately simple progression:
+
+```text
+1. Understand and explore the data
+             ↓
+2. Select a biologically and statistically suitable drug
+             ↓
+3. Match drug-response and gene-expression data
+             ↓
+4. Build a clean X/y dataset
+             ↓
+5. Establish a Linear Regression baseline
+             ↓
+6. Test Random Forest
+             ↓
+7. Test PyTorch MLP
+             ↓
+8. Compare generalization performance
+             ↓
+9. Interpret whether increased nonlinearity improved prediction
+```
+
+The central comparison is therefore:
+
+> **Does increasing model complexity provide a meaningful improvement in predicting cancer-cell response to Docetaxel from gene-expression data?**
+
+---
+
+# Future Extensions
+
+If the initial experiment produces meaningful results, potential extensions include:
+
+- Comparing additional drugs
+- Investigating the second Docetaxel entry (`DRUG_ID = 1007`)
+- Adding XGBoost as another nonlinear baseline
+- Testing different dimensionality-reduction or feature-selection approaches
+- Investigating which genes contribute most strongly to predictions
+- Comparing model performance across different drugs or cancer types
+- Exploring a two-stage classification + regression approach for the AUC ceiling effect
+- Comparing model-selected features with known biological pathways and drug-response biomarkers
+
+These extensions would allow the project to move from a single-drug proof of concept toward a broader pharmacogenomic ML analysis.
