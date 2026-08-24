@@ -101,4 +101,25 @@ therefore, reducing the dimensionality with PCA does not improve the linear mode
 
 ### Ridge regression results
 
+1. Overfitting/under-regularized:
+
+- alpha between 0.01 and 1000
+- Train R² ≈ 1.00
+- Test R² ≈ 0.172
+
+2. moderate regularization:
+
+- alpha bettwen 5000-25000
+- training R² decreases (model is not memorizing training data)
+- test R² improves
+- best R² and RMSE result is when alpha is 15000
+- MAE is worsened
+
+3. Underfitting/excessive regularization
+
+- after alpha is 25,000
+- model can not identify patterns
+
+Moderate Ridge regularization improved test R² and RMSE relative to unregularized Linear Regression, while MAE increased. This suggests that regularization modestly improved overall variance explained and reduced larger prediction errors, but did not improve average absolute prediction error.
+
 ---
