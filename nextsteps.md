@@ -49,6 +49,9 @@ Compare their performance against the original baseline.
 
 Run **Ridge Regression** to determine whether regularization improves the Linear Regression baseline and reduces overfitting.
 
+- compare several alpha values
+- looking for whether Ridge regression can lower the train R² while increasing the test R².
+
 ### 4. Evaluate
 
 For every experiment, record:
@@ -95,5 +98,7 @@ Train R²: 0.6372996299104322
 Test R²: 0.1632918879303885
 
 therefore, reducing the dimensionality with PCA does not improve the linear model
+
+### Ridge regression results
 
 ---

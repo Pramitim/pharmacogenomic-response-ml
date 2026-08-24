@@ -19,8 +19,8 @@ MAE: 0.2399737479389313
 R2: 0.14783724416792132
 
 **Train vs Test Data**
-R²: 0.897191065577738
-R²: 0.14783724416792132
+Train R²: 0.897191065577738
+Test R²: 0.14783724416792132
 
 ## MLP
 
@@ -31,11 +31,11 @@ R²: -1.5445211232491758
 
 **Train vs Test Data**
 Train R²: 0.99954443208043
-Train R²: -1.5445211232491758
+Test R²: -1.5445211232491758
 
 ## Findings
 
-Both models are overfitting heavily. The models are struggling to generalize from the available cell lines to unseen cell lines?"
+Increasing model complexity did not improve prediction performance when all ~36,000 gene-expression features were used directly. All three models showed evidence of overfitting, with the MLP showing the most severe failure to generalize.
 
 Is the number of genes too large relative to the number of samples?
 Is the model learning noise?
