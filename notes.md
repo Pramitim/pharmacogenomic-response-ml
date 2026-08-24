@@ -22,6 +22,17 @@ R2: 0.14783724416792132
 R²: 0.897191065577738
 R²: 0.14783724416792132
 
+## MLP
+
+**Predicted y test values vs. Actual y test values:**
+RMSE: 0.4797615171728442
+MAE: 0.35757038615724696
+R²: -1.5445211232491758
+
+**Train vs Test Data**
+Train R²: 0.99954443208043
+Train R²: -1.5445211232491758
+
 ## Findings
 
 Both models are overfitting heavily. The models are struggling to generalize from the available cell lines to unseen cell lines?"
