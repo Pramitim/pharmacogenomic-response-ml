@@ -87,6 +87,20 @@ Random Forest
 PyTorch MLP
 ```
 
+#### `04_pca_dimensionality_reduction.ipynb`
+
+- Examines the variance explained by different numbers of principal components.
+- Reduces the 36,000 gene-expression features into lower-dimensional representations.
+- Tests multiple component sizes with Linear Regression to evaluate the effect of dimensionality reduction on model performance.
+- Investigates whether reducing the feature space can limit overfitting and improve generalization.
+
+#### `05_ridge_regression.ipynb`
+
+- Applies Ridge Regression to address overfitting in the high-dimensional gene-expression dataset.
+- Experiments with a range of alpha values to evaluate different levels of regularization.
+- Compares training and test performance to identify the balance between overfitting and underfitting.
+- Evaluates model performance using R², RMSE, and MAE.
+
 ---
 
 # Data Sources
