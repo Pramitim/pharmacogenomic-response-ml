@@ -44,6 +44,8 @@ project/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_build_dataset.ipynb
 │   └── 03_modeling.ipynb
+│   └── 04_pca_dimensionality_reduction.ipynb`
+│   └── 05_ridge_regression.ipynb
 │
 └── README.md
 ```
